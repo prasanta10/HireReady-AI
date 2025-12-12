@@ -10,8 +10,9 @@ def read_root():
 @app.get("/github/{username}")
 async def get_repos(username: str):
     repos = await fetch_user_repos(username)
+    
     return {
         "username": username,
         "total_repos": len(repos),
-        "repositories": [repo["name"] for repo in repos]
+        "repositories": repos 
     }

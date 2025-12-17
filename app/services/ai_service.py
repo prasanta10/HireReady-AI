@@ -1,9 +1,4 @@
-from openai import OpenAI
-
-client = OpenAI(
-    base_url='http://localhost:11434/v1',
-    api_key='ollama',
-)
+import ollama
 
 def summarize_project(readme_content: str, project_name: str) -> str:
     if not readme_content or not readme_content.strip():
@@ -14,7 +9,8 @@ def summarize_project(readme_content: str, project_name: str) -> str:
 
     prompt = f"""
     You are an expert Technical Resume Writer.
-    Rewrite the following GitHub README into a SINGLE, professional resume bullet point (max 30 words).
+    Rewrite the following GitHub README into a THREE professional resume bullet point (max 30 words each).
+    Use Markdown bullet point format.
     Start with an action verb. Do not use "I". Output ONLY the bullet point.
 
     Project: {project_name}
@@ -23,16 +19,18 @@ def summarize_project(readme_content: str, project_name: str) -> str:
     """
 
     try:
-        response = client.chat.completions.create(
+        # FIXED: Use ollama.chat directly and move formatting options to 'options'
+        response = ollama.chat(
             model="llama3.2", 
             messages=[
                 {"role": "system", "content": "You are a helpful career assistant."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
+            options={"temperature": 0.7}
         )
         
-        return response.choices[0].message.content.strip()
+        # FIXED: Access response as a dictionary
+        return response['message']['content'].strip()
 
     except Exception as e:
         print(f"Error calling Local LLM: {e}")
@@ -60,12 +58,14 @@ def select_best_projects(projects: list, job_description: str) -> list:
     """
 
     try:
-        response = client.chat.completions.create(
+        # FIXED: Use ollama.chat directly
+        response = ollama.chat(
             model="llama3.2",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.1, # Low temperature for precision    
+            options={"temperature": 0.1} # Low temp goes in options
         )
-        selected_names = response.choices[0].message.content.strip()
+        # FIXED: Access response as dictionary
+        selected_names = response['message']['content'].strip()
         
         best_matches = [p for p in projects if p['name'] in selected_names]
         
@@ -78,35 +78,40 @@ def select_best_projects(projects: list, job_description: str) -> list:
         print(f"Selection Error: {e}")
         return projects[:3]
 
-def generate_tailored_section(current_resume: str, best_projects: list, job_description: str) -> str:
-    project_context = "\n".join(
-        [f"- {p['name']}: {p['summary']}" for p in best_projects]
-    )
+def generate_tailored_resume(current_resume_text: str, best_projects: list, job_description: str) -> str:
+    project_context = ""
+    for p in best_projects:
+        project_context += f"Project: {p['name']}\nDetails: {p['summary']}\nLink: {p['url']}\n\n"
 
     prompt = f"""
-    You are an expert Resume Writer.
+    You are an expert Resume Writer. 
     
-    JOB TARGET:
-    {job_description[:1000]}
+    TASK: 
+    Rewrite the candidate's resume to target a specific Job Description.
+    1. Keep the Contact Info, Skills, and Experience sections mostly the same (just polish them).
+    2. COMPLETELY REPLACE the "Projects" section with the 3 specific projects listed below.
+    3. Output the result as clean, professional Markdown.
     
-    CHOSEN PROJECTS:
+    INPUT CONTEXT:
+    1. OLD RESUME TEXT:
+    {current_resume_text}
+    
+    2. TARGET JOB DESCRIPTION:
+    {job_description[:2000]}
+    
+    3. NEW PROJECTS TO INSERT (Use these exactly):
     {project_context}
     
-    TASK:
-    Write a "Projects" section for a resume (in Markdown).
-    - Use ONLY the Chosen Projects listed above.
-    - Tailor the descriptions to use keywords from the Job Target.
-    - Format as: "### Project Name \n - Bullet point..."
-    - Do not include any intro or outro text.
+    GUIDELINES:
+    - Use H1 (#) for Name.
+    - Use H2 (##) for Section Headers (Experience, Projects, Skills, Education).
+    - Use bullet points (*) for details.
+    - Ensure the "Projects" section uses STAR format and keywords from the JD.
+    - Do NOT include any preamble like "Here is the resume". Just output the Markdown.
     """
     
     try:
-        response = client.chat.completions.create(
-            model="llama3.2",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.5, # Medium temperature = Be creative but accurate
-        )
-        return response.choices[0].message.content.strip()
-        
-    except Exception:
-        return "Error generating tailored section."
+        response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}])
+        return response['message']['content'].strip()
+    except Exception as e:
+        return f"Error generating resume: {e}"

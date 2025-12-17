@@ -1,7 +1,6 @@
 import streamlit as st
 
 def show_home():
-    # --- Custom CSS for the Professional Look ---
     st.markdown("""
     <style>
         /* Global font adjustments */
@@ -59,7 +58,6 @@ def show_home():
     </style>
     """, unsafe_allow_html=True)
 
-    # --- Hero Section ---
     st.markdown("""
     <div class="hero-container">
         <div class="hero-title">HIRE Ready AI</div>
@@ -69,7 +67,6 @@ def show_home():
     </div>
     """, unsafe_allow_html=True)
 
-    # --- Product Description (No Emojis) ---
     st.markdown("### Core Capabilities")
     
     col1, col2, col3 = st.columns(3)
@@ -104,9 +101,8 @@ def show_home():
         </div>
         """, unsafe_allow_html=True)
 
-    st.write("") # Spacer
+    st.write("") 
     st.markdown("---")
     st.markdown("*Select 'Tailor Resume' from the navigation menu to begin.*")
 
-# Execute
 show_home()

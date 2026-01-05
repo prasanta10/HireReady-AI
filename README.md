@@ -81,7 +81,7 @@ cd HireReady-AI
 ```bash
 pip install -r requirements.txt
 ```
-###Running the Application
+### Running the Application
 
 ```bash
 uvicorn app.main:app --reload

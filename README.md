@@ -7,7 +7,7 @@
 ![Ollama](https://img.shields.io/badge/AI-Llama%203.2-orange)
 ![Streamlit](https://img.shields.io/badge/Frontend-Streamlit-red)
 
-## 🚀 Project Overview
+## Project Overview
 
 The **HireReady-AI** is an end-to-end intelligent document processing system designed to solve the "generic resume" problem. Instead of manually editing resumes for every application, this tool uses a **Local Retrieval-Augmented Generation (RAG)** pipeline to:
 
@@ -23,11 +23,11 @@ This project runs entirely **offline** (after GitHub data fetching), ensuring se
 
 ##  Key Features
 
-* ** Local LLM Inference:** Utilizes **Ollama (Llama 3.2)** for privacy-first, zero-cost text generation and reasoning.
-* ** Semantic Project Matching:** Implements a logic layer that correlates technical requirements in a JD with unstructured README data from GitHub repositories.
-* ** Dynamic PDF Reconstruction:** Parses generic PDF structures and regenerates them into professional HTML/CSS-based templates (Harvard/Tech styles) using `xhtml2pdf`.
-* ** Asynchronous Architecture:** Built on **FastAPI** with `async/await` to handle concurrent data fetching (GitHub API) and CPU-bound PDF processing.
-* ** Intelligent Caching:** Uses **PostgreSQL/SQLAlchemy** to cache analyzed repository summaries, reducing redundant inference calls and API latency by ~40%.
+* **Local LLM Inference:** Utilizes **Ollama (Llama 3.2)** for privacy-first, zero-cost text generation and reasoning.
+* **Semantic Project Matching:** Implements a logic layer that correlates technical requirements in a JD with unstructured README data from GitHub repositories.
+* **Dynamic PDF Reconstruction:** Parses generic PDF structures and regenerates them into professional HTML/CSS-based templates (Harvard/Tech styles) using `xhtml2pdf`.
+* **Asynchronous Architecture:** Built on **FastAPI** with `async/await` to handle concurrent data fetching (GitHub API) and CPU-bound PDF processing.
+* **Intelligent Caching:** Uses **PostgreSQL/SQLAlchemy** to cache analyzed repository summaries, reducing redundant inference calls and API latency by ~40%.
 
 ---
 
@@ -69,7 +69,7 @@ graph TD
 * **Ollama** installed and running.
 * **PostgreSQL** (Optional, defaults to SQLite if not configured).
 
-###  Setup Local LLM
+### Setup Local LLM
 Ensure Ollama is running and pull the model:
 ```bash
 ollama pull llama3.2

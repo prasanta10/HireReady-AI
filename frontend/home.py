@@ -101,7 +101,43 @@ def show_home():
         </div>
         """, unsafe_allow_html=True)
 
-    st.write("") 
+    st.write("")
+    col4, col5, col6 = st.columns(3)
+
+    with col4:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-title">Vector Search</div>
+            <div class="feature-text">
+                Indexes every repository README in a persistent vector database (ChromaDB or FAISS), so project
+                selection is driven by embedding similarity instead of a flat cache lookup.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col5:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-title">ATS Scoring</div>
+            <div class="feature-text">
+                Grades the resume against the job description on six weighted checks - keywords, skills, structure,
+                contact, impact and formatting - before you download it.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col6:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-title">Cover Letter</div>
+            <div class="feature-text">
+                Generates a matching cover letter from the tailored resume and the selected projects, exported as
+                Markdown or a formatted PDF.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.write("")
     st.markdown("---")
     st.markdown("*Select 'Tailor Resume' from the navigation menu to begin.*")
 

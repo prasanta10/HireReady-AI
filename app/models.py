@@ -14,5 +14,11 @@ class ProjectSummary(SQLModel, table=True):
     
     url: str
     language: Optional[str] = None
-    
+
+    # Raw README kept so the repo can be re-chunked/re-embedded without hitting
+    # GitHub again; the hash tells us when the vector index is stale.
+    readme: Optional[str] = None
+    content_hash: Optional[str] = Field(default=None, index=True)
+    indexed_at: Optional[datetime] = None
+
     updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -21,7 +21,9 @@ from typing import Dict, List, Optional, Sequence
 import numpy as np
 
 from app.config import (
+    EMBED_DOCUMENT_PREFIX,
     EMBED_MODEL,
+    EMBED_QUERY_PREFIX,
     FALLBACK_EMBED_DIM,
     VECTOR_BACKEND,
     VECTOR_COLLECTION,
@@ -89,20 +91,32 @@ def _ollama_embed(texts: Sequence[str]) -> Optional[List[List[float]]]:
         return None
 
 
-def embed_texts(texts: Sequence[str]) -> List[List[float]]:
-    """Embed a batch of texts, always returning unit-length vectors."""
+def embed_texts(texts: Sequence[str], prefix: str = "") -> List[List[float]]:
+    """Embed a batch of texts, always returning unit-length vectors.
+
+    ``prefix`` is the model's task instruction (e.g. ``search_query: ``); the
+    hashed fallback ignores it so it never pollutes the bag of words.
+    """
     texts = [text or "" for text in texts]
     if not texts:
         return []
     with _embed_lock:
-        vectors = _ollama_embed(texts)
+        vectors = _ollama_embed([prefix + text for text in texts])
     if vectors is None:
         return [_hashed_embedding(text) for text in texts]
     return [_unit(vector) for vector in vectors]
 
 
-def embed_text(text: str) -> List[float]:
-    return embed_texts([text])[0]
+def embed_text(text: str, prefix: str = "") -> List[float]:
+    return embed_texts([text], prefix)[0]
+
+
+def embed_documents(texts: Sequence[str]) -> List[List[float]]:
+    return embed_texts(texts, EMBED_DOCUMENT_PREFIX)
+
+
+def embed_query(text: str) -> List[float]:
+    return embed_text(text, EMBED_QUERY_PREFIX)
 
 
 def embedding_backend_name() -> str:
@@ -260,6 +274,11 @@ class NumpyVectorStore:
             return len(self._records)
         return sum(1 for r in self._records if _matches(r.metadata, where))
 
+    def get(self, where: Optional[Dict] = None) -> List[VectorRecord]:
+        """Every stored chunk matching the filter (the corpus for lexical search)."""
+        with self._lock:
+            return [r for r in self._records if _matches(r.metadata, where or {})]
+
     # -- hooks for subclasses --
     def _similarities(self, query: np.ndarray, candidates: List[int]) -> np.ndarray:
         return self._vectors[candidates] @ query
@@ -366,6 +385,20 @@ class ChromaVectorStore:
             return int(self._collection.count())
         found = self._collection.get(where=_chroma_where(where), include=[])
         return len(found.get("ids") or [])
+
+    def get(self, where: Optional[Dict] = None) -> List[VectorRecord]:
+        """Every stored chunk matching the filter (the corpus for lexical search)."""
+        found = self._collection.get(
+            where=_chroma_where(where), include=["documents", "metadatas"]
+        )
+        return [
+            VectorRecord(id=doc_id, text=document or "", metadata=dict(metadata or {}))
+            for doc_id, document, metadata in zip(
+                found.get("ids") or [],
+                found.get("documents") or [],
+                found.get("metadatas") or [],
+            )
+        ]
 
     @property
     def dimension(self) -> Optional[int]:

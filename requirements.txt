@@ -25,6 +25,12 @@ numpy>=1.24
 chromadb>=0.5.0
 # faiss-cpu>=1.8.0
 
+# --- Re-ranking (cross-encoder) ---------------------------------------------
+# Scores fused dense + BM25 candidates with BAAI/bge-reranker-base (RERANK_MODEL).
+# Optional at runtime: without it the app keeps the Reciprocal Rank Fusion order.
+# CPU-only install: pip install torch --index-url https://download.pytorch.org/whl/cpu
+sentence-transformers>=3.0.0
+
 # --- Documents --------------------------------------------------------------
 pypdf==6.4.1
 markdown-pdf>=1.3

@@ -229,8 +229,9 @@ def render_results(result, job_description):
             retrieval = result.get("retrieval") or {}
             if retrieval.get("backend"):
                 st.caption(
-                    f"Semantic index: {retrieval.get('backend')} · "
-                    f"{retrieval.get('user_chunks', 0)} chunks · {retrieval.get('embedder', '')}"
+                    f"Hybrid index: {retrieval.get('backend')} · "
+                    f"{retrieval.get('user_chunks', 0)} chunks · {retrieval.get('embedder', '')} · "
+                    f"re-ranker: {retrieval.get('reranker', 'n/a')}"
                 )
 
         with col_pdf_view:

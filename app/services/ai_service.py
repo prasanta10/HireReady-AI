@@ -1,8 +1,8 @@
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 import ollama
 
-from app.config import FINAL_PROJECT_COUNT, LLM_MODEL
+from app.config import LLM_MODEL
 
 
 def _chat(prompt: str, system: Optional[str] = None, temperature: float = 0.7) -> str:
@@ -43,59 +43,6 @@ def summarize_project(readme_content: str, project_name: str) -> str:
     except Exception as e:
         print(f"Error calling Local LLM: {e}")
         return f"Developed {project_name} (Local AI Failed)"
-
-
-def select_best_projects(
-    projects: Sequence[Dict],
-    job_description: str,
-    count: int = FINAL_PROJECT_COUNT,
-) -> List[Dict]:
-    """Pick the final projects from a semantically retrieved shortlist.
-
-    ``projects`` is expected to already be ordered by vector-search relevance
-    (see ``retrieval_service.rank_repositories``); the LLM only re-ranks inside
-    that shortlist, so a model failure degrades to the retrieval order rather
-    than to an arbitrary slice.
-    """
-    projects = list(projects)
-    if not projects:
-        return []
-    if len(projects) <= count:
-        return projects
-
-    candidates_text = "\n".join(
-        f"- {p['name']} (semantic match {p.get('match_score', 0)}%): {p['summary']}"
-        for p in projects
-    )
-
-    prompt = f"""
-    You are a Technical Recruiter.
-
-    JOB DESCRIPTION:
-    {job_description[:1500]}
-
-    CANDIDATE PROJECTS (pre-ranked by semantic similarity to the job description):
-    {candidates_text}
-
-    TASK:
-    Identify the {count} projects from the list above that make the candidate look best for this
-    specific Job Description. Prefer projects whose technology overlaps the job requirements.
-    Return ONLY the names of the {count} projects, separated by commas.
-    Example Output: project-alpha, data-viz-tool, api-gateway
-    """
-
-    try:
-        selected_names = _chat(prompt, temperature=0.1)
-        best_matches = [p for p in projects if p["name"] in selected_names]
-
-        if not best_matches:
-            return projects[:count]
-
-        return best_matches[:count]
-
-    except Exception as e:
-        print(f"Selection Error: {e}")
-        return projects[:count]
 
 
 def generate_tailored_resume(

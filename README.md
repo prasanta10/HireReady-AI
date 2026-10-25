@@ -14,7 +14,7 @@ The **HireReady-AI** is an end-to-end intelligent document processing system des
 1.  **Ingest** a user's existing PDF resume and GitHub portfolio.
 2.  **Index** every repository README as embeddings in a local **vector database** (ChromaDB or FAISS).
 3.  **Analyze** a target Job Description (JD) for semantic keywords and required skills.
-4.  **Retrieve** the most relevant projects by vector similarity, then let the LLM re-rank the shortlist.
+4.  **Retrieve** the most relevant projects with **hybrid search** (dense vectors + BM25 fused by Reciprocal Rank Fusion), then **re-rank** them with a cross-encoder.
 5.  **Rewrite** the resume's "Projects" section in **STAR format** using a localized Llama 3.2 model.
 6.  **Score** the result against the JD with a heuristic **ATS grader** before you download it.
 7.  **Generate** a matching **cover letter** from the tailored resume and the selected projects.
@@ -27,7 +27,8 @@ This project runs entirely **offline** (after GitHub data fetching), ensuring se
 ##  Key Features
 
 * **Local LLM Inference:** Utilizes **Ollama (Llama 3.2)** for privacy-first, zero-cost text generation and reasoning.
-* **Vector Search over Repositories:** READMEs are chunked, embedded (`nomic-embed-text`) and stored in a persistent **vector database**. Project selection is retrieval-driven, not a flat cache lookup — the LLM only re-ranks an already relevant shortlist, so a model hiccup degrades to semantic order instead of an arbitrary slice.
+* **Hybrid Search over Repositories:** READMEs are chunked, embedded (`nomic-embed-text`, with its `search_query:` / `search_document:` task prefixes) and stored in a persistent **vector database**. Each JD runs two retrievers — dense semantic search and **BM25** keyword search, which catches exact technology names (`gRPC`, `Kafka`, `k8s`) that embeddings blur — and **Reciprocal Rank Fusion** merges them by rank, so the two score scales never need calibrating.
+* **Cross-Encoder Re-ranking:** The top fused chunks are scored by `BAAI/bge-reranker-base`, which reads the JD and each chunk together. Unlike the previous LLM re-ranker it is deterministic, scores 30 chunks in a second or two on CPU (versus a full LLM call), and its score is the "% match" shown in the UI. The JD is first condensed to its skill-bearing sentences so the requirements, not the company blurb, fill the model's 512-token window. Without the model, ranking falls back to RRF order.
 * **Pluggable Vector Backend:** **ChromaDB** by default, **FAISS** on request, and a dependency-free NumPy index as the last resort — all behind one interface, chosen with `VECTOR_BACKEND`.
 * **Heuristic ATS Scoring:** Grades the resume against the JD on six weighted checks (keywords, hard skills, section structure, contact details, quantified impact, formatting) and reports the before/after delta plus concrete fixes. No LLM involved, so the score is instant, deterministic and explainable.
 * **Cover Letter Generation:** Produces a matching, project-specific cover letter from the tailored resume, downloadable as Markdown or PDF.
@@ -46,6 +47,8 @@ This project runs entirely **offline** (after GitHub data fetching), ensuring se
 | **Database** | **SQLite + SQLAlchemy/SQLModel** | Persistence layer for user data and repo summaries. |
 | **Vector Store** | **ChromaDB / FAISS / NumPy** | Semantic index over repository content (`VECTOR_BACKEND`). |
 | **Embeddings** | **Ollama (nomic-embed-text)** | Local vectors for JD-to-repository matching. |
+| **Hybrid Retrieval** | **BM25 + Reciprocal Rank Fusion** | Exact keyword recall fused with semantic recall (pure Python). |
+| **Re-ranker** | **sentence-transformers (bge-reranker-base)** | Cross-encoder precision ranking of retrieved chunks. |
 | **ATS Scoring** | **Pure Python heuristics** | Deterministic keyword, structure and impact grading. |
 | **PDF Engine** | **xhtml2pdf / PyPDF** | Text extraction and programmatic PDF generation. |
 | **Data Source** | **GitHub REST API** | Fetching live repository metadata and READMEs. |
@@ -67,9 +70,13 @@ graph TD
     H --> V[(Vector DB: Chroma/FAISS)]
     G -- No --> V
     A -->|Job Description| Q[Embed JD as Query]
+    A -->|Job Description| BM[BM25 Keyword Search]
     Q --> V
-    V -->|Top-K chunks, scored per repo| S[Ranked Shortlist]
-    S --> R[Llama 3.2: Re-rank to Top 3]
+    V -->|Dense top-K chunks| F2[Reciprocal Rank Fusion]
+    V -.->|User's chunks| BM
+    BM -->|Lexical top-K chunks| F2
+    F2 --> CE[Cross-Encoder Re-rank: bge-reranker-base]
+    CE -->|Chunk scores aggregated per repo| R[Top 3 Projects]
     R --> W[Llama 3.2: Rewrite in STAR Format]
     B --> W
     W --> X[Heuristic ATS Scorer]
@@ -94,6 +101,14 @@ ollama pull nomic-embed-text
 ```
 > Without `nomic-embed-text` the app still runs: it falls back to a hashed bag-of-words
 > embedder, which keeps retrieval working offline at lower semantic quality.
+
+The cross-encoder (`BAAI/bge-reranker-base`, ~1 GB) is downloaded from Hugging Face the first
+time the API starts and cached locally; after that it runs offline. Without
+`sentence-transformers` installed, the app skips re-ranking and keeps the fused order. On a
+machine without a GPU, install the CPU build of PyTorch first to avoid the multi-GB CUDA wheels:
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
 ```bash
 git clone https://github.com/prasanta10/HireReady-AI.git
 cd HireReady-AI
@@ -113,7 +128,11 @@ Every setting has a working default; override any of them in a `.env` file:
 | `VECTOR_BACKEND` | `auto` | `auto`, `chroma`, `faiss` or `numpy`. |
 | `VECTOR_STORE_DIR` | `./vector_store` | Where the index is persisted. |
 | `MAX_REPOS` | `10` | Repositories summarised per request. |
-| `SHORTLIST_SIZE` | `6` | Repositories retrieved before LLM re-ranking. |
+| `RERANK_MODEL` | `BAAI/bge-reranker-base` | Cross-encoder re-ranker (`none` disables it). |
+| `RERANK_CANDIDATES` | `30` | Fused chunks scored by the cross-encoder. |
+| `RETRIEVAL_TOP_K` / `LEXICAL_TOP_K` | `24` / `24` | Chunks pulled by dense / BM25 search. |
+| `RRF_K` | `60` | Reciprocal Rank Fusion damping constant. |
+| `SHORTLIST_SIZE` | `6` | Repositories returned in the ranked shortlist. |
 | `FINAL_PROJECT_COUNT` | `3` | Projects written into the resume. |
 
 To use FAISS instead of ChromaDB:

@@ -9,11 +9,10 @@ from app import crud
 from app.config import FINAL_PROJECT_COUNT, LLM_COOLDOWN_SECONDS, MAX_REPOS, SHORTLIST_SIZE
 from app.db import get_session, init_db
 from app.schemas import ATSScoreRequest, CoverLetterRequest, CoverLetterResponse
-from app.services import retrieval_service
+from app.services import reranker, retrieval_service
 from app.services.ai_service import (
     generate_cover_letter,
     generate_tailored_resume,
-    select_best_projects,
     summarize_project,
 )
 from app.services.ats_service import compare_scores, score_resume
@@ -33,6 +32,8 @@ async def lifespan(app: FastAPI):
     print("DEBUG: Database tables created.")
     # Warm the vector backend so the first request does not pay for it.
     await asyncio.to_thread(retrieval_service.index_stats)
+    # Load the cross-encoder up front (first run also downloads it).
+    await asyncio.to_thread(reranker.warm_up)
     yield
 
 app = FastAPI(title="AI Resume Architect", lifespan=lifespan)
@@ -123,8 +124,8 @@ async def tailor_resume(
 
         project_summaries.append({"name": repo["name"], "summary": summary, "url": url})
         
-    # 3. Semantic retrieval: shortlist repos whose content matches the JD
-    print("DEBUG: Running semantic search over indexed repositories...")
+    # 3. Hybrid retrieval (dense + BM25 fused with RRF), re-ranked by a cross-encoder
+    print("DEBUG: Running hybrid search over indexed repositories...")
     shortlist = await asyncio.to_thread(
         retrieval_service.rank_repositories,
         username,
@@ -133,11 +134,8 @@ async def tailor_resume(
         SHORTLIST_SIZE,
     )
 
-    # 4. Select Best Matches (LLM re-rank inside the retrieved shortlist)
-    print("DEBUG: Selecting best projects...")
-    best_projects = await asyncio.to_thread(
-        select_best_projects, shortlist, job_description, FINAL_PROJECT_COUNT
-    )
+    # 4. Select Best Matches (the cross-encoder order is final)
+    best_projects = shortlist[:FINAL_PROJECT_COUNT]
     
     # 5. Write Content (Full Resume Rewrite)
     print("DEBUG: Rewriting full resume...")
@@ -171,7 +169,12 @@ async def tailor_resume(
             for p in best_projects
         ],
         "shortlist": [
-            {"name": p["name"], "match_score": p.get("match_score", 0.0)} for p in shortlist
+            {
+                "name": p["name"],
+                "match_score": p.get("match_score", 0.0),
+                "rank_source": p.get("rank_source", "none"),
+            }
+            for p in shortlist
         ],
         "retrieval": retrieval_service.index_stats(username),
         "tailored_markdown": tailored_markdown,
